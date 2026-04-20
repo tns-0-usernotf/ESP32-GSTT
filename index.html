@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Giám Sát Thiên Tai</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f7f6; text-align: center; }
+        .dashboard { display: flex; justify-content: center; gap: 20px; margin-top: 20px; }
+        .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 200px; }
+        .danger { background-color: #ffebee; color: #c62828; border: 2px solid #c62828; animation: blink 1s infinite; }
+        
+        /* Hiệu ứng nhấp nháy cảnh báo */
+        @keyframes blink { 50% { opacity: 0.5; } }
+        
+        #chart-container { width: 80%; margin: 40px auto; background: white; padding: 20px; border-radius: 10px; }
+    </style>
+</head>
+<body>
+
+    <h1>HỆ THỐNG GIÁM SÁT THIÊN TAI</h1>
+    <h2 id="status-text">Đang tải dữ liệu...</h2>
+
+    <div class="dashboard">
+        <div class="card" id="card-soil">
+            <h3>Độ ẩm đất</h3>
+            <h1 id="val-soil">-- %</h1>
+        </div>
+        <div class="card" id="card-vib">
+            <h3>Rung chấn</h3>
+            <h1 id="val-vib">-- m/s²</h1>
+        </div>
+    </div>
+
+    <div id="chart-container">
+        <canvas id="myChart"></canvas>
+    </div>
+
+    <script>
+        // 1. ĐIỀN THÔNG TIN THINGSPEAK CỦA BẠN VÀO ĐÂY
+        const CHANNEL_ID = "ĐIỀN_SỐ_ID_KÊNH"; 
+        const READ_API_KEY = "ĐIỀN_READ_API_KEY";
+        
+        // Cài đặt biểu đồ
+        const ctx = document.getElementById('myChart').getContext('2d');
+        const myChart = new Chart(ctx, {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: 'Độ ẩm (%)', borderColor: 'blue', data: [] }, { label: 'Rung chấn (m/s²)', borderColor: 'red', data: [] }] },
+            options: { responsive: true, animation: false }
+        });
+
+        // 2. HÀM LẤY DỮ LIỆU TỪ THINGSPEAK
+        async function fetchData() {
+            const url = `https://api.thingspeak.com/channels/${CHANNEL_ID}/feeds.json?api_key=${READ_API_KEY}&results=1`;
+            
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                const feed = data.feeds[0]; // Lấy bản tin mới nhất
+
+                // ThingSpeak lưu dữ liệu dạng chuỗi, cần chuyển thành số
+                const soil = parseFloat(feed.field1);
+                const vib = parseFloat(feed.field2);
+                const time = new Date(feed.created_at).toLocaleTimeString();
+
+                // 3. CẬP NHẬT LÊN MÀN HÌNH
+                document.getElementById('val-soil').innerText = soil + " %";
+                document.getElementById('val-vib').innerText = vib + " m/s²";
+
+                // 4. LOGIC CẢNH BÁO
+                const cardSoil = document.getElementById('card-soil');
+                const cardVib = document.getElementById('card-vib');
+                const statusText = document.getElementById('status-text');
+
+                cardSoil.classList.remove('danger');
+                cardVib.classList.remove('danger');
+                statusText.style.color = "black";
+
+                if (vib > 2.0) { // Cảnh báo Động đất
+                    cardVib.classList.add('danger');
+                    statusText.innerText = "!! CẢNH BÁO ĐỘNG ĐẤT !!";
+                    statusText.style.color = "red";
+                } else if (soil > 80) { // Cảnh báo Sạt lở
+                    cardSoil.classList.add('danger');
+                    statusText.innerText = "!! NGUY CƠ SẠT LỞ !!";
+                    statusText.style.color = "orange";
+                } else {
+                    statusText.innerText = "Hệ thống an toàn";
+                }
+
+                // 5. VẼ TIẾP VÀO BIỂU ĐỒ
+                myChart.data.labels.push(time);
+                myChart.data.datasets[0].data.push(soil);
+                myChart.data.datasets[1].data.push(vib);
+                
+                // Giữ lại 15 điểm dữ liệu gần nhất để biểu đồ không bị quá dài
+                if (myChart.data.labels.length > 15) {
+                    myChart.data.labels.shift();
+                    myChart.data.datasets[0].data.shift();
+                    myChart.data.datasets[1].data.shift();
+                }
+                myChart.update();
+
+            } catch (error) {
+                console.error("Lỗi kết nối:", error);
+            }
+        }
+
+        // Tự động chạy hàm fetchData mỗi 20 giây (bằng với chu kỳ gửi của ESP32)
+        setInterval(fetchData, 20000);
+        fetchData(); // Lần chạy đầu tiên ngay khi mở web
+    </script>
+</body>
+</html>

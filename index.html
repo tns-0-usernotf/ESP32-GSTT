@@ -10,10 +10,18 @@
         .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 200px; }
         .danger { background-color: #ffebee; color: #c62828; border: 2px solid #c62828; animation: blink 1s infinite; }
         
-        /* Hiệu ứng nhấp nháy cảnh báo */
         @keyframes blink { 50% { opacity: 0.5; } }
         
-        #chart-container { width: 80%; margin: 40px auto; background: white; padding: 20px; border-radius: 10px; }
+        /* Chỉnh sửa khung chứa biểu đồ */
+        .chart-container { 
+            width: 80%; 
+            max-width: 900px;
+            margin: 20px auto; 
+            background: white; 
+            padding: 20px; 
+            border-radius: 10px; 
+            box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+        }
     </style>
 </head>
 <body>
@@ -32,42 +40,82 @@
         </div>
     </div>
 
-    <div id="chart-container">
-        <canvas id="myChart"></canvas>
+    <div class="chart-container">
+        <canvas id="soilChart"></canvas>
+    </div>
+    
+    <div class="chart-container">
+        <canvas id="vibChart"></canvas>
     </div>
 
     <script>
+        // ==========================================
         // 1. ĐIỀN THÔNG TIN THINGSPEAK CỦA BẠN VÀO ĐÂY
-        const CHANNEL_ID = "3349950"; 
+        // ==========================================
+        const CHANNEL_ID = "349950"; 
         const READ_API_KEY = "J19ZUM4EVA7CGQLJ";
         
-        // Cài đặt biểu đồ
-        const ctx = document.getElementById('myChart').getContext('2d');
-        const myChart = new Chart(ctx, {
+        // ==========================================
+        // 2. KHỞI TẠO 2 BIỂU ĐỒ RIÊNG BIỆT
+        // ==========================================
+        
+        // Biểu đồ Độ ẩm (Màu xanh dương)
+        const ctxSoil = document.getElementById('soilChart').getContext('2d');
+        const soilChart = new Chart(ctxSoil, {
             type: 'line',
-            data: { labels: [], datasets: [{ label: 'Độ ẩm (%)', borderColor: 'blue', data: [] }, { label: 'Rung chấn (m/s²)', borderColor: 'red', data: [] }] },
+            data: { 
+                labels: [], 
+                datasets: [{ 
+                    label: 'Độ ẩm đất (%)', 
+                    borderColor: '#2196F3', // Xanh dương
+                    backgroundColor: 'rgba(33, 150, 243, 0.1)',
+                    borderWidth: 2,
+                    fill: true, // Tô màu nhạt dưới đường kẻ
+                    data: [] 
+                }] 
+            },
             options: { responsive: true, animation: false }
         });
 
-        // 2. HÀM LẤY DỮ LIỆU TỪ THINGSPEAK
+        // Biểu đồ Rung chấn (Màu đỏ)
+        const ctxVib = document.getElementById('vibChart').getContext('2d');
+        const vibChart = new Chart(ctxVib, {
+            type: 'line',
+            data: { 
+                labels: [], 
+                datasets: [{ 
+                    label: 'Mức độ Rung chấn (m/s²)', 
+                    borderColor: '#F44336', // Đỏ
+                    backgroundColor: 'rgba(244, 67, 54, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    data: [] 
+                }] 
+            },
+            options: { responsive: true, animation: false }
+        });
+
+        // ==========================================
+        // 3. HÀM KÉO DỮ LIỆU & CẬP NHẬT BIỂU ĐỒ
+        // ==========================================
         async function fetchData() {
             const url = `https://api.thingspeak.com/channels/${CHANNEL_ID}/feeds.json?api_key=${READ_API_KEY}&results=1`;
             
             try {
                 const response = await fetch(url);
                 const data = await response.json();
-                const feed = data.feeds[0]; // Lấy bản tin mới nhất
+                const feed = data.feeds[0]; 
 
-                // ThingSpeak lưu dữ liệu dạng chuỗi, cần chuyển thành số
+                // Chuyển đổi dữ liệu
                 const soil = parseFloat(feed.field1);
                 const vib = parseFloat(feed.field2);
                 const time = new Date(feed.created_at).toLocaleTimeString();
 
-                // 3. CẬP NHẬT LÊN MÀN HÌNH
+                // Cập nhật thẻ số
                 document.getElementById('val-soil').innerText = soil + " %";
                 document.getElementById('val-vib').innerText = vib + " m/s²";
 
-                // 4. LOGIC CẢNH BÁO
+                // Logic Cảnh báo
                 const cardSoil = document.getElementById('card-soil');
                 const cardVib = document.getElementById('card-vib');
                 const statusText = document.getElementById('status-text');
@@ -76,11 +124,11 @@
                 cardVib.classList.remove('danger');
                 statusText.style.color = "black";
 
-                if (vib > 2.0) { // Cảnh báo Động đất
+                if (vib > 2.0) { 
                     cardVib.classList.add('danger');
                     statusText.innerText = "!! CẢNH BÁO ĐỘNG ĐẤT !!";
                     statusText.style.color = "red";
-                } else if (soil > 80) { // Cảnh báo Sạt lở
+                } else if (soil > 80) { 
                     cardSoil.classList.add('danger');
                     statusText.innerText = "!! NGUY CƠ SẠT LỞ !!";
                     statusText.style.color = "orange";
@@ -88,27 +136,32 @@
                     statusText.innerText = "Hệ thống an toàn";
                 }
 
-                // 5. VẼ TIẾP VÀO BIỂU ĐỒ
-                myChart.data.labels.push(time);
-                myChart.data.datasets[0].data.push(soil);
-                myChart.data.datasets[1].data.push(vib);
-                
-                // Giữ lại 15 điểm dữ liệu gần nhất để biểu đồ không bị quá dài
-                if (myChart.data.labels.length > 15) {
-                    myChart.data.labels.shift();
-                    myChart.data.datasets[0].data.shift();
-                    myChart.data.datasets[1].data.shift();
+                // CẬP NHẬT BIỂU ĐỒ ĐỘ ẨM
+                soilChart.data.labels.push(time);
+                soilChart.data.datasets[0].data.push(soil);
+                if (soilChart.data.labels.length > 15) {
+                    soilChart.data.labels.shift();
+                    soilChart.data.datasets[0].data.shift();
                 }
-                myChart.update();
+                soilChart.update();
+
+                // CẬP NHẬT BIỂU ĐỒ RUNG CHẤN
+                vibChart.data.labels.push(time);
+                vibChart.data.datasets[0].data.push(vib);
+                if (vibChart.data.labels.length > 15) {
+                    vibChart.data.labels.shift();
+                    vibChart.data.datasets[0].data.shift();
+                }
+                vibChart.update();
 
             } catch (error) {
                 console.error("Lỗi kết nối:", error);
             }
         }
 
-        // Tự động chạy hàm fetchData mỗi 20 giây (bằng với chu kỳ gửi của ESP32)
+        // Chạy hàm lấy dữ liệu mỗi 20 giây
         setInterval(fetchData, 20000);
-        fetchData(); // Lần chạy đầu tiên ngay khi mở web
+        fetchData(); 
     </script>
 </body>
 </html>

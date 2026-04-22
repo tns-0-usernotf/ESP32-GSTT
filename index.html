@@ -5,22 +5,43 @@
     <title>Giám Sát Thiên Tai</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; background-color: #f4f7f6; text-align: center; }
+        body { font-family: Arial, sans-serif; background-color: #f4f7f6; text-align: center; margin: 0; padding: 20px; }
         .dashboard { display: flex; justify-content: center; gap: 20px; margin-top: 20px; }
         .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 200px; }
         .danger { background-color: #ffebee; color: #c62828; border: 2px solid #c62828; animation: blink 1s infinite; }
         
         @keyframes blink { 50% { opacity: 0.5; } }
         
-        /* Chỉnh sửa khung chứa biểu đồ */
+        /* 1. KHUNG CHỨA LỚN BAO BỌC 2 BIỂU ĐỒ */
+        .charts-wrapper {
+            display: flex;              /* Kích hoạt Flexbox để dàn hàng ngang */
+            justify-content: center;    /* Căn giữa */
+            gap: 20px;                  /* Khoảng cách giữa 2 cột */
+            width: 95%;                 /* Độ rộng tổng thể */
+            max-width: 1200px;
+            margin: 30px auto;          /* Căn giữa khung bọc trên trang */
+        }
+
+        /* 2. KHUNG TỪNG BIỂU ĐỒ (MỖI CỘT) */
         .chart-container { 
-            width: 80%; 
-            max-width: 900px;
-            margin: 20px auto; 
+            flex: 1;                    /* Mỗi cột chiếm tỷ lệ đều nhau (50%) */
             background: white; 
             padding: 20px; 
             border-radius: 10px; 
             box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+            min-width: 0;               /* Tránh lỗi tràn đồ thị trong Flexbox */
+        }
+
+        /* 3. RESPONSIVE: TỰ ĐỘNG XẾP DỌC TRÊN ĐIỆN THOẠI */
+        @media (max-width: 800px) {
+            .charts-wrapper {
+                flex-direction: column; /* Đổi hướng Flexbox thành xếp dọc */
+            }
+            .dashboard {
+                flex-direction: column;
+                align-items: center;
+            }
+            .card { width: 80%; }
         }
     </style>
 </head>
@@ -40,26 +61,23 @@
         </div>
     </div>
 
-    <div class="chart-container">
-        <canvas id="soilChart"></canvas>
-    </div>
-    
-    <div class="chart-container">
-        <canvas id="vibChart"></canvas>
+    <div class="charts-wrapper">
+        <div class="chart-container">
+            <canvas id="soilChart"></canvas>
+        </div>
+        <div class="chart-container">
+            <canvas id="vibChart"></canvas>
+        </div>
     </div>
 
     <script>
         // ==========================================
         // 1. ĐIỀN THÔNG TIN THINGSPEAK CỦA BẠN VÀO ĐÂY
         // ==========================================
-        const CHANNEL_ID = "349950"; 
+        const CHANNEL_ID = "3349950"; 
         const READ_API_KEY = "J19ZUM4EVA7CGQLJ";
         
-        // ==========================================
-        // 2. KHỞI TẠO 2 BIỂU ĐỒ RIÊNG BIỆT
-        // ==========================================
-        
-        // Biểu đồ Độ ẩm (Màu xanh dương)
+        // Biểu đồ Độ ẩm
         const ctxSoil = document.getElementById('soilChart').getContext('2d');
         const soilChart = new Chart(ctxSoil, {
             type: 'line',
@@ -67,17 +85,17 @@
                 labels: [], 
                 datasets: [{ 
                     label: 'Độ ẩm đất (%)', 
-                    borderColor: '#2196F3', // Xanh dương
+                    borderColor: '#2196F3', 
                     backgroundColor: 'rgba(33, 150, 243, 0.1)',
                     borderWidth: 2,
-                    fill: true, // Tô màu nhạt dưới đường kẻ
+                    fill: true, 
                     data: [] 
                 }] 
             },
-            options: { responsive: true, animation: false }
+            options: { responsive: true, maintainAspectRatio: false } // maintainAspectRatio: false giúp biểu đồ tự ép vừa cột
         });
 
-        // Biểu đồ Rung chấn (Màu đỏ)
+        // Biểu đồ Rung chấn
         const ctxVib = document.getElementById('vibChart').getContext('2d');
         const vibChart = new Chart(ctxVib, {
             type: 'line',
@@ -85,19 +103,17 @@
                 labels: [], 
                 datasets: [{ 
                     label: 'Mức độ Rung chấn (m/s²)', 
-                    borderColor: '#F44336', // Đỏ
+                    borderColor: '#F44336', 
                     backgroundColor: 'rgba(244, 67, 54, 0.1)',
                     borderWidth: 2,
                     fill: true,
                     data: [] 
                 }] 
             },
-            options: { responsive: true, animation: false }
+            options: { responsive: true, maintainAspectRatio: false }
         });
 
-        // ==========================================
-        // 3. HÀM KÉO DỮ LIỆU & CẬP NHẬT BIỂU ĐỒ
-        // ==========================================
+        // Hàm kéo dữ liệu
         async function fetchData() {
             const url = `https://api.thingspeak.com/channels/${CHANNEL_ID}/feeds.json?api_key=${READ_API_KEY}&results=1`;
             
@@ -106,16 +122,13 @@
                 const data = await response.json();
                 const feed = data.feeds[0]; 
 
-                // Chuyển đổi dữ liệu
                 const soil = parseFloat(feed.field1);
                 const vib = parseFloat(feed.field2);
                 const time = new Date(feed.created_at).toLocaleTimeString();
 
-                // Cập nhật thẻ số
                 document.getElementById('val-soil').innerText = soil + " %";
                 document.getElementById('val-vib').innerText = vib + " m/s²";
 
-                // Logic Cảnh báo
                 const cardSoil = document.getElementById('card-soil');
                 const cardVib = document.getElementById('card-vib');
                 const statusText = document.getElementById('status-text');
@@ -136,7 +149,7 @@
                     statusText.innerText = "Hệ thống an toàn";
                 }
 
-                // CẬP NHẬT BIỂU ĐỒ ĐỘ ẨM
+                // Cập nhật biểu đồ
                 soilChart.data.labels.push(time);
                 soilChart.data.datasets[0].data.push(soil);
                 if (soilChart.data.labels.length > 15) {
@@ -145,7 +158,6 @@
                 }
                 soilChart.update();
 
-                // CẬP NHẬT BIỂU ĐỒ RUNG CHẤN
                 vibChart.data.labels.push(time);
                 vibChart.data.datasets[0].data.push(vib);
                 if (vibChart.data.labels.length > 15) {
@@ -159,7 +171,6 @@
             }
         }
 
-        // Chạy hàm lấy dữ liệu mỗi 20 giây
         setInterval(fetchData, 20000);
         fetchData(); 
     </script>

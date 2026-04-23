@@ -12,7 +12,7 @@
 // ==========================================
 const char* ssid = "TEN_WIFI_CUA_BAN";
 const char* password = "MAT_KHAU_WIFI";
-String writeAPIKey = "DIEN_WRITE_API_KEY_CUA_BAN_VAO_DAY"; 
+String writeAPIKey = "KU4M2NDRH3ZGK622"; 
 
 // ==========================================
 // 2. CẤU HÌNH CHÂN CẮM (PIN MAPPING)

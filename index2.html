@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Giám Sát Thiên Tai</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f7f6; text-align: center; margin: 0; padding: 20px; }
+        .dashboard { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; margin-top: 20px; }
+        .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 220px; }
+        .danger { background-color: #ffebee; color: #c62828; border: 2px solid #c62828; animation: blink 1s infinite; }
+        @keyframes blink { 50% { opacity: 0.5; } }
+        
+        .charts-wrapper {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 20px;
+            width: 98%;
+            max-width: 1400px;
+            margin: 30px auto;
+        }
+        .chart-container { 
+            flex: 1; 
+            min-width: 320px; /* Tự động xuống dòng nếu màn hình nhỏ */
+            background: white; 
+            padding: 20px; 
+            border-radius: 10px; 
+            box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+        }
+    </style>
+</head>
+<body>
+
+    <h1>HỆ THỐNG GIÁM SÁT THIÊN TAI</h1>
+    <h2 id="status-text">Đang tải dữ liệu...</h2>
+
+    <!-- 3 THẺ HIỂN THỊ THÔNG SỐ -->
+    <div class="dashboard">
+        <div class="card" id="card-soil">
+            <h3>Độ ẩm đất</h3>
+            <h1 id="val-soil">-- %</h1>
+        </div>
+        <div class="card" id="card-vib">
+            <h3>Rung chấn</h3>
+            <h1 id="val-vib">-- m/s²</h1>
+        </div>
+        <div class="card" id="card-tilt">
+            <h3>Góc nghiêng</h3>
+            <h2 id="val-tilt" style="margin-top: 25px;">X: --° | Y: --°</h2>
+        </div>
+    </div>
+
+    <!-- 3 BIỂU ĐỒ -->
+    <div class="charts-wrapper">
+        <div class="chart-container"><canvas id="soilChart"></canvas></div>
+        <div class="chart-container"><canvas id="vibChart"></canvas></div>
+        <div class="chart-container"><canvas id="tiltChart"></canvas></div>
+    </div>
+
+    <script>
+        // ==========================================
+        // ĐIỀN THÔNG TIN CỦA BẠN VÀO ĐÂY
+        // ==========================================
+        const CHANNEL_ID = "ĐIỀN_ID_KÊNH_CỦA_BẠN"; 
+        const READ_API_KEY = "ĐIỀN_READ_API_CỦA_BẠN";
+        
+        // 1. Biểu đồ Độ ẩm
+        const ctxSoil = document.getElementById('soilChart').getContext('2d');
+        const soilChart = new Chart(ctxSoil, {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: 'Độ ẩm đất (%)', borderColor: '#2196F3', backgroundColor: 'rgba(33, 150, 243, 0.1)', borderWidth: 2, fill: true, data: [] }] },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+
+        // 2. Biểu đồ Rung chấn
+        const ctxVib = document.getElementById('vibChart').getContext('2d');
+        const vibChart = new Chart(ctxVib, {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: 'Rung chấn (m/s²)', borderColor: '#F44336', backgroundColor: 'rgba(244, 67, 54, 0.1)', borderWidth: 2, fill: true, data: [] }] },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+
+        // 3. Biểu đồ Góc nghiêng (Gộp cả X và Y vào chung 1 đồ thị)
+        const ctxTilt = document.getElementById('tiltChart').getContext('2d');
+        const tiltChart = new Chart(ctxTilt, {
+            type: 'line',
+            data: { 
+                labels: [], 
+                datasets: [
+                    { label: 'Trục X (Roll)', borderColor: '#9C27B0', borderWidth: 2, data: [] },
+                    { label: 'Trục Y (Pitch)', borderColor: '#FF9800', borderWidth: 2, data: [] }
+                ] 
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+
+        // Hàm kéo dữ liệu
+        async function fetchData() {
+            const url = `https://api.thingspeak.com/channels/${CHANNEL_ID}/feeds.json?api_key=${READ_API_KEY}&results=1`;
+            
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                const feed = data.feeds[0]; 
+
+                // Lấy 4 thông số
+                const soil = parseFloat(feed.field1) || 0;
+                const vib = parseFloat(feed.field2) || 0;
+                const roll = parseFloat(feed.field5) || 0;
+                const pitch = parseFloat(feed.field6) || 0;
+                const time = new Date(feed.created_at).toLocaleTimeString();
+
+                // Cập nhật số liệu lên Card
+                document.getElementById('val-soil').innerText = soil.toFixed(0) + " %";
+                document.getElementById('val-vib').innerText = vib.toFixed(1) + " m/s²";
+                document.getElementById('val-tilt').innerText = `X: ${roll.toFixed(0)}° | Y: ${pitch.toFixed(0)}°`;
+
+                // Logic Cảnh báo màu sắc
+                const cardSoil = document.getElementById('card-soil');
+                const cardVib = document.getElementById('card-vib');
+                const cardTilt = document.getElementById('card-tilt');
+                const statusText = document.getElementById('status-text');
+
+                cardSoil.classList.remove('danger'); cardVib.classList.remove('danger'); cardTilt.classList.remove('danger');
+                statusText.style.color = "black";
+
+                // Điều kiện nguy hiểm (Động đất > 2.0, Đất ẩm > 80, Nghiêng > 20 độ)
+                if (vib > 2.0) { 
+                    cardVib.classList.add('danger');
+                    statusText.innerText = "!! CẢNH BÁO ĐỘNG ĐẤT !!";
+                    statusText.style.color = "red";
+                } else if (soil > 80 || Math.abs(roll) > 20 || Math.abs(pitch) > 20) { 
+                    if (soil > 80) cardSoil.classList.add('danger');
+                    if (Math.abs(roll) > 20 || Math.abs(pitch) > 20) cardTilt.classList.add('danger');
+                    statusText.innerText = "!! NGUY CƠ SẠT LỞ / SỤT LÚN !!";
+                    statusText.style.color = "orange";
+                } else {
+                    statusText.innerText = "Hệ thống an toàn";
+                }
+
+                // Hàm hỗ trợ cập nhật mảng biểu đồ
+                function updateChart(chart, newDataArray) {
+                    chart.data.labels.push(time);
+                    chart.data.datasets.forEach((dataset, i) => {
+                        dataset.data.push(newDataArray[i]);
+                        if (chart.data.labels.length > 15) dataset.data.shift();
+                    });
+                    if (chart.data.labels.length > 15) chart.data.labels.shift();
+                    chart.update();
+                }
+
+                // Đẩy dữ liệu vào 3 biểu đồ
+                updateChart(soilChart, [soil]);
+                updateChart(vibChart, [vib]);
+                updateChart(tiltChart, [roll, pitch]);
+
+            } catch (error) { console.error("Lỗi kết nối:", error); }
+        }
+
+        setInterval(fetchData, 20000);
+        fetchData(); 
+    </script>
+</body>
+</html>
